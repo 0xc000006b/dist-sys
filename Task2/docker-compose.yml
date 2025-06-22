@@ -1,0 +1,52 @@
+version: '3.8'
+services:
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_CLUSTERNAME=my-cluster
+    volumes:
+      - ./hazelcast-docker.xml:/opt/hazelcast/config/hazelcast-docker.xml
+    networks:
+      - hazelcast-network
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_CLUSTERNAME=my-cluster
+    volumes:
+      - ./hazelcast-docker.xml:/opt/hazelcast/config/hazelcast-docker.xml
+    networks:
+      - hazelcast-network
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_CLUSTERNAME=my-cluster
+    volumes:
+      - ./hazelcast-docker.xml:/opt/hazelcast/config/hazelcast-docker.xml
+    networks:
+      - hazelcast-network
+
+  management-center:
+    image: hazelcast/management-center:5.3
+    ports:
+      - "8080:8080"
+    environment:
+      - MC_DEFAULT_CLUSTER=my-cluster
+      - MC_DEFAULT_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - hazelcast-network
+
+networks:
+  hazelcast-network:
+    driver: bridge
