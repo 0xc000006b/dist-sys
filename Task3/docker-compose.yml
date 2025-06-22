@@ -1,0 +1,182 @@
+version: "3.8"
+services:
+  hazelcast1:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast1
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - microservices-net
+
+  hazelcast2:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast2
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - microservices-net
+
+  hazelcast3:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - microservices-net
+
+  logging1:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging1
+    environment:
+      - LOG_PORT=50051
+      - HZ_CLUSTERS=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50051:50051"
+    networks:
+      - microservices-net
+
+  logging2:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging2
+    environment:
+      - LOG_PORT=50052
+      - HZ_CLUSTERS=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50052:50052"
+    networks:
+      - microservices-net
+
+  logging3:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging3
+    environment:
+      - LOG_PORT=50053
+      - HZ_CLUSTERS=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50053:50053"
+    networks:
+      - microservices-net
+
+  messages:
+    build:
+      context: ./messages-service
+      dockerfile: ./Dockerfile
+    container_name: messages
+    environment:
+      - HZ_CLUSTERS=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python messages-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "8882:8882"
+    networks:
+      - microservices-net
+
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: ./Dockerfile
+    container_name: config-server
+    environment:
+      - CFG_PORT=8883
+      - LOGGING_URLS=logging1:50051,logging2:50052,logging3:50053
+      - MESSAGES_URLS=messages:8882
+    command: python config-server.py
+    ports:
+      - "8883:8883"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8883/services/logging"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - microservices-net
+
+  facade:
+    build:
+      context: ./facade-service
+      dockerfile: ./Dockerfile
+    container_name: facade
+    environment:
+      - CONFIG_URL=http://config-server:8883/services  # Corrected URL
+      - FCD_DEBUG=true
+    ports:
+      - "8880:8880"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      logging1:
+        condition: service_started
+      logging2:
+        condition: service_started
+      logging3:
+        condition: service_started
+      messages:
+        condition: service_started
+    command: python facade-service.py
+    networks:
+      - microservices-net
+
+networks:
+  microservices-net:
+    driver: bridge
