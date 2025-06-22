@@ -1,0 +1,185 @@
+version: "3.8"
+services:
+  consul:
+    image: hashicorp/consul:1.15
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    command: "agent -server -bootstrap-expect=1 -ui -client=0.0.0.0"
+    environment:
+      - CONSUL_BIND_ADDRESS=0.0.0.0
+    volumes:
+      - consul-data:/consul/data
+
+  consul-init:
+    image: curlimages/curl
+    depends_on:
+      - consul
+    volumes:
+      - ./init-consul.sh:/init-consul.sh
+    entrypoint: ["/bin/sh", "/init-consul.sh"]
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9092:9092"
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9093:9093"
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9094:9094"
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "echo 'Waiting for Kafka brokers to be ready...' &&
+      sleep 30 &&
+      kafka-topics --create --topic msg-queue --bootstrap-server kafka1:9092 --partitions 2 --replication-factor 3 --if-not-exists &&
+      echo 'Topic msg-queue created with 2 partitions'"
+
+  hazelcast1:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+
+  hazelcast2:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5702:5701"
+
+  hazelcast3:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5703:5701"
+
+  facade-service:
+    build:
+      context: ./facade-service
+    ports:
+      - "8880:8880"
+    depends_on:
+      - kafka1
+      - consul
+      - consul-init
+    environment:
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+
+  messages-service1:
+    build:
+      context: ./messages-service
+    environment:
+      - INSTANCE_ID=msg1
+      - PORT=8890
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "8890:8890"
+    depends_on:
+      - kafka1
+      - consul
+      - consul-init
+
+  messages-service2:
+    build:
+      context: ./messages-service
+    environment:
+      - INSTANCE_ID=msg2
+      - PORT=8891
+      - CONSUL RefrHOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "8891:8891"
+    depends_on:
+      - kafka1
+      - consul
+      - consul-init
+
+  logging-service1:
+    build:
+      context: ./logging-service
+    environment:
+      - INSTANCE_ID=log1
+      - PORT=8881
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "8881:8881"
+    depends_on:
+      - consul
+      - consul-init
+
+  logging-service2:
+    build:
+      context: ./logging-service
+    environment:
+      - INSTANCE_ID=log2
+      - PORT=8882
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "8882:8882"
+    depends_on:
+      - consul
+      - consul-init
+
+  logging-service3:
+    build:
+      context: ./logging-service
+    environment:
+      - INSTANCE_ID=log3
+      - PORT=8883
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+    ports:
+      - "8883:8883"
+    depends_on:
+      - consul
+      - consul-init
+
+volumes:
+  consul-data:
