@@ -1,0 +1,311 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc -w 2 localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - svc-net
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - svc-net
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka2
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9093"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - svc-net
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka3
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9094"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - svc-net
+
+  hazelcast1:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast1
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - svc-net
+
+  hazelcast2:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast2
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - svc-net
+
+  hazelcast3:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_CLUSTERNAME=dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5701/hazelcast/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - svc-net
+
+  logging1:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging1
+    environment:
+      - PORT=50051
+      - HZ_NODES=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50051:50051"
+    networks:
+      - svc-net
+
+  logging2:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging2
+    environment:
+      - PORT=50052
+      - HZ_NODES=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50052:50052"
+    networks:
+      - svc-net
+
+  logging3:
+    build:
+      context: ./logging-service
+      dockerfile: ./Dockerfile
+    container_name: logging3
+    environment:
+      - PORT=50053
+      - HZ_NODES=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
+    command: python logging-service.py
+    depends_on:
+      hazelcast1:
+        condition: service_healthy
+      hazelcast2:
+        condition: service_healthy
+      hazelcast3:
+        condition: service_healthy
+    ports:
+      - "50053:50053"
+    networks:
+      - svc-net
+
+  messages1:
+    build:
+      context: ./messages-service
+      dockerfile: ./Dockerfile
+    container_name: messages1
+    environment:
+      - PORT=8882
+      - KAFKA_SERVERS=kafka1:9092,kafka2:9093,kafka3:9094
+    command: python messages-service.py
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    ports:
+      - "8882:8882"
+    networks:
+      - svc-net
+
+  messages2:
+    build:
+      context: ./messages-service
+      dockerfile: ./Dockerfile
+    container_name: messages2
+    environment:
+      - PORT=8883
+      - KAFKA_SERVERS=kafka1:9092,kafka2:9093,kafka3:9094
+    command: python messages-service.py
+    depends_on:
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+    ports:
+      - "8883:8883"
+    networks:
+      - svc-net
+
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: ./Dockerfile
+    container_name: config-server
+    environment:
+      - LOG_SVCS=logging1:50051,logging2:50052,logging3:50053
+      - MSG_SVCS=messages1:8882,messages2:8883
+    command: python config-server.py
+    ports:
+      - "8881:8881"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8881/svc/log"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - svc-net
+
+  facade:
+    build:
+      context: ./facade-service
+      dockerfile: ./Dockerfile
+    container_name: facade
+    environment:
+      - CFG_SERVER_URL=http://config-server:8881
+      - KAFKA_SERVERS=kafka1:9092,kafka2:9093,kafka3:9094
+    ports:
+      - "8880:8880"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+      kafka2:
+        condition: service_healthy
+      kafka3:
+        condition: service_healthy
+      logging1:
+        condition: service_started
+      logging2:
+        condition: service_started
+      logging3:
+        condition: service_started
+      messages1:
+        condition: service_started
+      messages2:
+        condition: service_started
+    command: python facade-service.py
+    networks:
+      - svc-net
+
+networks:
+  svc-net:
+    driver: bridge
